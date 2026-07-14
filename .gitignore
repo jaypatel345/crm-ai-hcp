@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+.vscode/
+venv/
+__pycache__/
+*.pyc
+frontend/node_modules/
+backend/venv/
