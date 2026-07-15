@@ -255,7 +255,7 @@ const interactionSlice = createSlice({
         if (action.payload.action && action.payload.prefill) {
           state.formPrefill = {
             action: action.payload.action,
-            data: action.payload.prefill,
+            prefill: action.payload.prefill,
           };
         }
       })
