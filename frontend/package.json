@@ -11,10 +11,10 @@
   "dependencies": {
     "@hookform/resolvers": "^3.1.1",
     "@reduxjs/toolkit": "^1.9.5",
-    "@tailwindcss/vite": "^1.2.5",
+    "@tailwindcss/vite": "^4.3.2",
     "axios": "^1.5.0",
     "clsx": "^2.1.1",
-    "langchain": "^0.0.0",
+    "langchain": "^1.5.3",
     "lucide-react": "^0.437.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -26,8 +26,8 @@
     "zod": "^3.23.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.3.3",
-    "tailwindcss": "^4.4.3",
-    "vite": "^5.4.1"
+    "@vitejs/plugin-react": "^6.0.3",
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.1.4"
   }
 }
