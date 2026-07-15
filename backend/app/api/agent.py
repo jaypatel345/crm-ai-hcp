@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 import traceback
 
@@ -15,10 +15,13 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str
+    prefill_data: Optional[Dict[str, Any]] = None
 
 
 class ChatResponse(BaseModel):
     response: str
+    action: Optional[str] = None
+    prefill: Optional[Dict[str, Any]] = None
 
 
 @router.post("/ai/chat", response_model=ChatResponse)
@@ -27,6 +30,9 @@ async def chat(request: ChatRequest):
     Chat with the LangGraph AI agent.
     This endpoint processes user messages through the LangGraph agent
     and returns the agent's response.
+    
+    If prefill_data is provided, it will directly save the interaction
+    (used for confirmation flow).
     """
     # Quick pre-check for required config
     if not settings.groq_api_key:
@@ -39,9 +45,36 @@ async def chat(request: ChatRequest):
         )
 
     try:
+        # If prefill_data is provided, directly save the interaction (confirmation flow)
+        if request.prefill_data:
+            from ..agents.tools import log_interaction
+            
+            # Set prefill_only to false to actually save
+            save_data = request.prefill_data.copy()
+            save_data["prefill_only"] = False
+            
+            result = log_interaction.invoke(save_data)
+            
+            # Parse the result
+            try:
+                import json
+                parsed = json.loads(result)
+                if isinstance(parsed, dict) and "action" in parsed:
+                    return ChatResponse(**parsed)
+            except:
+                pass
+            
+            return ChatResponse(response=result)
+        
+        # Normal chat flow
         agent = AgentGraph()
-        response = agent.run(request.message)
-        return ChatResponse(response=response)
+        response_data = agent.run(request.message)
+        
+        # Handle both string responses and structured responses
+        if isinstance(response_data, dict):
+            return ChatResponse(**response_data)
+        else:
+            return ChatResponse(response=response_data)
     except groq.BadRequestError as e:
         # Handle provider-side bad request (e.g., function call failure) and surface details
         logger.error("Groq BadRequest in /ai/chat: %s", traceback.format_exc())

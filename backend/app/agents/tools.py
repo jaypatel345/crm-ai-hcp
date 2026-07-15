@@ -16,17 +16,19 @@ def get_db_session() -> Session:
 
 @tool
 def log_interaction(
-    hcp_name: str,
-    interaction_type: str,
-    date: str,
-    topics_discussed: str,
-    summary: str,
+    hcp_name: Optional[str] = None,
+    interaction_type: Optional[str] = None,
+    date: Optional[str] = None,
+    time: Optional[str] = None,
+    topics_discussed: Optional[str] = None,
+    summary: Optional[str] = None,
     attendees: Optional[str] = None,
     materials_shared: Optional[str] = None,
     samples_distributed: Optional[str] = None,
     sentiment: Optional[str] = None,
     outcomes: Optional[str] = None,
-    follow_up_actions: Optional[str] = None
+    follow_up_actions: Optional[str] = None,
+    prefill_only: Optional[bool] = True
 ) -> str:
     """
     Log a new interaction with an HCP. This tool captures interaction data with AI-generated summary and entity extraction.
@@ -35,6 +37,7 @@ def log_interaction(
         hcp_name: Name of the Healthcare Professional
         interaction_type: Type of interaction (visit, call, email, etc.)
         date: Date of the interaction (YYYY-MM-DD format)
+        time: Time of the interaction (HH:MM format)
         topics_discussed: Topics discussed during the interaction
         summary: AI-generated summary of the interaction
         attendees: Optional comma-separated list of attendees
@@ -43,41 +46,112 @@ def log_interaction(
         sentiment: Optional sentiment (positive, neutral, negative)
         outcomes: Optional outcomes of the interaction
         follow_up_actions: Optional follow-up actions
+        prefill_only: If True, return prefill data without saving to database (default: True)
     
     Returns:
-        Confirmation message with interaction ID
+        JSON string with action type and prefill data for form
     """
     db = get_db_session()
     try:
         # Find or create HCP
         hcp_service = HCPService(db)
-        hcps = hcp_service.get_all(search=hcp_name, limit=1)
+        hcps = []
+        hcp_details = None
+        if hcp_name:
+            hcps = hcp_service.get_all(search=hcp_name, limit=1)
         
-        if not hcps:
-            # Create new HCP if not found
+        hcp_id = None
+        if hcps:
+            hcp = hcps[0]
+            hcp_id = hcp.id
+            # Include HCP details in response
+            hcp_details = {
+                "id": hcp.id,
+                "name": hcp.name,
+                "specialty": hcp.specialty,
+                "hospital": hcp.hospital,
+                "city": hcp.city,
+                "phone": hcp.phone,
+                "email": hcp.email
+            }
+        elif hcp_name:
+            # Auto-create HCP if not found
             from ..schemas.hcp import HCPCreate
             hcp_data = HCPCreate(name=hcp_name)
             hcp = hcp_service.create(hcp_data)
-        else:
-            hcp = hcps[0]
+            hcp_id = hcp.id
+            # Include created HCP details in response
+            hcp_details = {
+                "id": hcp.id,
+                "name": hcp.name,
+                "specialty": hcp.specialty,
+                "hospital": hcp.hospital,
+                "city": hcp.city,
+                "phone": hcp.phone,
+                "email": hcp.email
+            }
         
-        # Create interaction
+        if not hcp_id:
+            return json.dumps({
+                "action": "log_interaction",
+                "prefill": {"error": "HCP name is required to log interaction"}
+            })
+        
+        # Parse date
+        date_str = date
+        if date:
+            try:
+                interaction_date = datetime.strptime(date, "%Y-%m-%d")
+                date_str = interaction_date.strftime("%Y-%m-%d")
+            except:
+                date_str = date
+        else:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        # If prefill_only mode, return prefill data without saving
+        if prefill_only:
+            prefill_data = {
+                "hcp_id": hcp_id,
+                "hcp_name": hcp_name,
+                "hcp_details": hcp_details,
+                "interaction_type": interaction_type,
+                "date": date_str,
+                "time": time,
+                "topics_discussed": topics_discussed,
+                "voice_note_summary": summary,
+                "attendees": attendees,
+                "materials_shared": materials_shared,
+                "samples_distributed": samples_distributed,
+                "sentiment": sentiment,
+                "outcomes": outcomes,
+                "follow_up_actions": follow_up_actions,
+                "prefill_only": True
+            }
+            
+            result = {
+                "action": "log_interaction",
+                "prefill": prefill_data
+            }
+            
+            return json.dumps(result)
+        
+        # Otherwise, save to database
         interaction_service = InteractionService(db)
         from ..schemas.interaction import InteractionCreate
         
-        # Parse date
         try:
-            interaction_date = datetime.strptime(date, "%Y-%m-%d")
+            interaction_date = datetime.strptime(date_str, "%Y-%m-%d")
         except:
             interaction_date = datetime.now()
         
         interaction_data = InteractionCreate(
-            hcp_id=hcp.id,
-            interaction_type=interaction_type,
+            hcp_id=hcp_id,
+            interaction_type=interaction_type or "visit",
             date=interaction_date,
+            time=time,
             attendees=attendees,
             topics_discussed=topics_discussed,
-            voice_note_summary=summary,
+            voice_note_summary=summary or topics_discussed,  # Use topics as summary if not provided
             materials_shared=materials_shared,
             samples_distributed=samples_distributed,
             sentiment=sentiment,
@@ -86,7 +160,20 @@ def log_interaction(
         )
         
         interaction = interaction_service.create(interaction_data)
-        return f"Interaction logged successfully with ID: {interaction.id} for HCP: {hcp.name}"
+        
+        # Return success with interaction details
+        result = {
+            "action": "log_interaction",
+            "prefill": {
+                "success": True,
+                "interaction_id": interaction.id,
+                "hcp_id": hcp_id,
+                "hcp_name": hcp_name,
+                "message": f"Interaction logged successfully with ID: {interaction.id} for HCP: {hcp_name}"
+            }
+        }
+        
+        return json.dumps(result)
     finally:
         db.close()
 
@@ -122,47 +209,42 @@ def edit_interaction(
         follow_up_actions: Optional new follow-up actions
     
     Returns:
-        Confirmation message with updated interaction details
+        JSON string with action type and prefill data for form
     """
     db = get_db_session()
     try:
         interaction_service = InteractionService(db)
-        from ..schemas.interaction import InteractionUpdate
         
-        update_data = {}
-        if interaction_type:
-            update_data["interaction_type"] = interaction_type
-        if date:
-            try:
-                update_data["date"] = datetime.strptime(date, "%Y-%m-%d")
-            except:
-                pass
-        if topics_discussed:
-            update_data["topics_discussed"] = topics_discussed
-        if summary:
-            update_data["voice_note_summary"] = summary
-        if attendees:
-            update_data["attendees"] = attendees
-        if materials_shared:
-            update_data["materials_shared"] = materials_shared
-        if samples_distributed:
-            update_data["samples_distributed"] = samples_distributed
-        if sentiment:
-            update_data["sentiment"] = sentiment
-        if outcomes:
-            update_data["outcomes"] = outcomes
-        if follow_up_actions:
-            update_data["follow_up_actions"] = follow_up_actions
+        # Get existing interaction to prefill current values
+        existing = interaction_service.get_by_id(interaction_id)
+        if not existing:
+            return json.dumps({
+                "action": "edit_interaction",
+                "prefill": {"error": f"Interaction {interaction_id} not found"}
+            })
         
-        if update_data:
-            interaction_update = InteractionUpdate(**update_data)
-            updated = interaction_service.update(interaction_id, interaction_update)
-            if updated:
-                return f"Interaction {interaction_id} updated successfully"
-            else:
-                return f"Interaction {interaction_id} not found"
-        else:
-            return "No updates provided"
+        # Build prefill data with existing values and updates
+        prefill_data = {
+            "interaction_id": interaction_id,
+            "hcp_id": existing.hcp_id,
+            "interaction_type": interaction_type if interaction_type else existing.interaction_type,
+            "date": date if date else existing.date.strftime("%Y-%m-%d"),
+            "topics_discussed": topics_discussed if topics_discussed else existing.topics_discussed,
+            "voice_note_summary": summary if summary else existing.voice_note_summary,
+            "attendees": attendees if attendees else existing.attendees,
+            "materials_shared": materials_shared if materials_shared else existing.materials_shared,
+            "samples_distributed": samples_distributed if samples_distributed else existing.samples_distributed,
+            "sentiment": sentiment if sentiment else existing.sentiment,
+            "outcomes": outcomes if outcomes else existing.outcomes,
+            "follow_up_actions": follow_up_actions if follow_up_actions else existing.follow_up_actions,
+        }
+        
+        result = {
+            "action": "edit_interaction",
+            "prefill": prefill_data
+        }
+        
+        return json.dumps(result)
     finally:
         db.close()
 
