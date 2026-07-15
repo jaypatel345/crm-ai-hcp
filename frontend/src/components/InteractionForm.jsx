@@ -114,14 +114,15 @@ export default function InteractionForm() {
       // Refresh HCP list to ensure newly created HCPs are available
       const handlePrefill = async () => {
         // First refresh with empty search to get all HCPs including newly created ones
-        await dispatch(fetchHCPs({ search: "", limit: 100 }));
+        const refreshResult = await dispatch(fetchHCPs({ search: "", limit: 100 }));
+        const refreshedHCPs = refreshResult.payload;
         
         // Map prefill data to form fields (replace mode - don't append)
         if (data.hcp_id) {
           setValue("hcp_id", data.hcp_id);
           
           // Try to find HCP in refreshed list first
-          const hcp = hcps.find(h => h.id === data.hcp_id);
+          const hcp = refreshedHCPs.find(h => h.id === data.hcp_id);
           if (hcp) {
             setSearchTerm(hcp.name);
             dispatch(selectHCP(hcp));
@@ -165,7 +166,7 @@ export default function InteractionForm() {
       
       handlePrefill();
     }
-  }, [formPrefill, hcps, setValue, dispatch, watch, reset, selectedHCP]);
+  }, [formPrefill, setValue, dispatch, reset, selectedHCP]);
 
   const filteredHCPs = hcps.filter(
     (hcp) =>

@@ -133,7 +133,8 @@ def log_interaction(
                 "prefill": prefill_data
             }
             
-            return json.dumps(result)
+            # Ensure we return valid JSON
+            return json.dumps(result, ensure_ascii=False)
         
         # Otherwise, save to database
         interaction_service = InteractionService(db)

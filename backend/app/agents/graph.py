@@ -28,12 +28,62 @@ def agent_node(state: AgentState) -> AgentState:
     """
     Process a user message, route to the proper tool when needed, and generate a response.
     """
+    import logging
+    import json
+    logger = logging.getLogger(__name__)
+    
     state = extract_entities(state)
     tool_name = route_to_tool(state)
+    
+    logger.info(f"Agent node routing to: {tool_name}")
+    logger.info(f"Tool name type: {type(tool_name)}")
 
+    # For log_interaction, ALWAYS return structured response - never call generate_response
+    if tool_name == "log_interaction":
+        logger.info("Entering log_interaction branch")
+        # Execute the tool
+        state = execute_tool(state, tool_name)
+        
+        tool_result = state.get("tool_result", "")
+        logger.info(f"Log interaction tool result: {tool_result[:500] if tool_result else 'empty'}")
+        
+        # Try to parse as JSON and return structured response
+        try:
+            parsed = json.loads(tool_result) if isinstance(tool_result, str) else tool_result
+            if isinstance(parsed, dict):
+                # Return structured response with action and prefill
+                prefill_data = parsed.get("prefill", {})
+                # Ensure prefill_only is set for frontend confirmation flow
+                prefill_data["prefill_only"] = True
+                
+                state["final_response"] = {
+                    "response": "I've filled in the form with the information you provided. Would you like to save this interaction?",
+                    "action": parsed.get("action", "log_interaction"),
+                    "prefill": prefill_data
+                }
+                logger.info(f"Returning structured response for log_interaction")
+                return state
+        except Exception as e:
+            logger.error(f"Failed to parse tool result: {e}")
+        
+        # Fallback: create structured response from extracted entities
+        entities = state.get("extracted_entities", {})
+        entities["prefill_only"] = True
+        
+        state["final_response"] = {
+            "response": "I've filled in the form with the information you provided. Would you like to save this interaction?",
+            "action": "log_interaction",
+            "prefill": entities
+        }
+        logger.info(f"Returning fallback structured response")
+        return state
+    
     if tool_name == "generate_response":
+        logger.info("Entering generate_response branch")
         return generate_response(state)
 
+    # For other tools, execute and use generate_response
+    logger.info(f"Executing other tool: {tool_name}")
     state = execute_tool(state, tool_name)
     return generate_response(state)
 
@@ -45,35 +95,14 @@ def create_graph():
     # Initialize the graph with our state
     workflow = StateGraph(AgentState)
 
-    # Create LLM with tools
-    tools = [
-        log_interaction,
-        edit_interaction,
-        search_hcps,
-        get_interaction_history,
-        recommend_follow_up,
-    ]
-    llm = ChatGroq(model=MODEL_NAME, api_key=settings.groq_api_key).bind_tools(tools)
-    tool_node = ToolNode(tools)
-
-    # Add nodes
+    # Add only the custom agent node (no built-in tool calling)
     workflow.add_node("agent", agent_node)
-    workflow.add_node("tools", tool_node)
 
     # Set the entry point
     workflow.set_entry_point("agent")
 
-    # Define routing logic
-    def should_continue(state: AgentState) -> Any:
-        messages = state["messages"]
-        last_message = messages[-1]
-        if getattr(last_message, "tool_calls", None):
-            return "tools"
-        return END
-
-    # Add conditional edges
-    workflow.add_conditional_edges("agent", should_continue)
-    workflow.add_edge("tools", "agent")
+    # The agent node handles all routing internally, so we go straight to END
+    workflow.add_edge("agent", END)
 
     # Compile the graph
     app = workflow.compile()
