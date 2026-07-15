@@ -209,69 +209,82 @@ Captures interaction data with AI-powered entity extraction and summarization.
 - Structured prefill mode for user confirmation
 - Voice note summarization
 
+### 1. Log Interaction
+
+Creates a new interaction by extracting structured information from a natural language conversation.
+
 **Example Usage:**
-```
-User: "I met Dr. Sharma today at 2 PM, discussed diabetes medication, shared brochure"
-AI: Extracts entities and populates form with:
-- HCP: Dr. Sharma
+```text
+User: "I met Dr. Akit Shah today at 2 PM at City Care Hospital. We discussed our new diabetes medication and I shared the product brochure. He showed positive interest and asked for clinical trial data. Schedule a follow-up in two weeks."
+
+AI: Extracts entities and populates the form with:
+- HCP: Dr. Akit Shah
 - Date: Today
-- Time: 14:00
-- Topics: diabetes medication
-- Materials: clinical trial brochure
-- Sentiment: neutral
+- Time: 2:00 PM
+- Location: City Care Hospital
+- Topics: New diabetes medication
+- Materials Shared: Product brochure
+- Sentiment: Positive
+- Follow-up: In 2 weeks
 ```
+
+---
 
 ### 2. Edit Interaction
-Modifies existing interaction records with prefill of current values.
 
-**Features:**
-- Prefills current interaction data
-- Allows selective field updates
-- Maintains audit trail with timestamps
+Modifies an existing interaction while prefilling the current values.
+
+**Example Usage:**
+```text
+User: "Edit interaction 5. Update the sentiment to very positive and add that Dr. Akit Shah requested pricing details."
+
+AI:
+- Loads interaction #5
+- Updates the sentiment to "Very Positive"
+- Adds "Requested pricing details" to the notes
+- Saves the updated interaction
+```
+
+---
 
 ### 3. Search HCP
+
 Finds Healthcare Professionals using flexible search criteria.
 
-**Search Parameters:**
-- Name (partial matching)
-- Specialty
-- Hospital
-- City
+**Example Usage:**
+```text
+User: "Search for Dr. Akit Shah."
 
-**Example:**
+AI:
+Returns the matching HCP profile with details such as specialty, hospital, city, and contact information.
 ```
-User: "Search for cardiologists in Mumbai"
-AI: Returns list of cardiologists in Mumbai
-```
+
+---
 
 ### 4. View Interaction History
-Retrieves chronological interaction history for specific HCPs.
 
-**Features:**
-- Chronological ordering
-- Sentiment trends
-- Outcomes tracking
-- Follow-up status
+Retrieves the complete interaction history for a specific HCP.
 
-**Example:**
+**Example Usage:**
+```text
+User: "Show my interaction history with Dr. Akit Shah."
+
+AI:
+Returns a chronological summary of previous meetings, discussion topics, outcomes, sentiment trends, and follow-up status.
 ```
-User: "Show my previous meetings with Dr. Sharma"
-AI: Returns summarized interaction history with key insights
-```
+
+---
 
 ### 5. Recommend Follow-up
-Analyzes interaction history to suggest optimal follow-up actions.
 
-**Analysis Factors:**
-- Days since last contact
-- Previous sentiment
-- Pending outcomes
-- Historical patterns
+Analyzes previous interactions and recommends the next best follow-up action.
 
-**Example:**
-```
-User: "When should I follow up with Dr. Sharma?"
-AI: "Based on positive engagement 2 days ago, recommend following up within the next week to discuss new product opportunities."
+**Example Usage:**
+```text
+User: "When should I follow up with Dr. Akit Shah?"
+
+AI:
+"Based on your last interaction, Dr. Akit Shah showed positive interest and requested clinical trial data. I recommend following up within the next two weeks with the requested information."
 ```
 
 ## 🗄️ Database Schema
